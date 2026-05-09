@@ -1,10 +1,9 @@
-import torch
+﻿import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
-import multiprocessing
 
-# �����Զ���ģ��
+# 加载自定义模型
 from models.model_factory import get_model
 from data.dataset import get_dataloaders
 from utils.args import parse_args
@@ -13,7 +12,7 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, epoch, nu
     model.train()
     train_loss = 0.0
     
-    # ѵ���׶�
+    # 训练阶段
     for inputs, labels in tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs}', leave=False):
         inputs = inputs.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
@@ -33,8 +32,8 @@ def validate(model, val_loader, criterion, device):
     val_loss, correct = 0.0, 0
     with torch.no_grad():
         for inputs, labels in val_loader:
-            inputs = inputs.to(device)
-            labels = labels.to(device)
+            inputs = inputs.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
             
             outputs = model(inputs)
             val_loss += criterion(outputs, labels).item() * inputs.size(0)
@@ -43,11 +42,11 @@ def validate(model, val_loader, criterion, device):
     return val_loss / len(val_loader.dataset), correct / len(val_loader.dataset)
 
 def main(args):
-    # ���ݺ�ģ�ͳ�ʼ��
+    # 数据和模型初始化
     train_loader, val_loader, num_classes = get_dataloaders(args)
 
-    # ��ʼ��ģ��
-    print(f"\n��ʼ��{args.model_name.upper()}ģ��...")
+    # 初始化模型
+    print(f"\n初始化 {args.model_name.upper()} 模型...")
     model = get_model(
         args.model_name, 
         num_classes, 
@@ -56,13 +55,13 @@ def main(args):
         device=args.device
     )
     
-    # ��ӡģ����Ϣ
+    # 打印模型信息
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"�ܲ�����: {total_params/1e6:.2f}M")
-    print(f"��ѵ������: {trainable_params/1e6:.2f}M")
+    print(f"总参数量: {total_params/1e6:.2f}M")
+    print(f"可训练参数量: {trainable_params/1e6:.2f}M")
 
-    # ѵ������
+    # 训练设置
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(
         model.parameters(),
@@ -71,36 +70,33 @@ def main(args):
     )
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=3)
 
-    # ѵ��ѭ��
+    # 训练循环
     best_acc = 0.0
-    print("\n��ʼѵ��...")
+    print("\n开始训练...")
     for epoch in range(args.num_epochs):
-        # ѵ���׶�
+        # 训练阶段
         train_loss_avg = train_one_epoch(model, train_loader, criterion, optimizer, args.device, epoch, args.num_epochs)
 
-        # ��֤�׶�
+        # 验证阶段
         val_loss_avg, val_acc = validate(model, val_loader, criterion, args.device)
         
-        # ����ѧϰ��
+        # 更新学习率
         scheduler.step(val_acc)
         
-        # �������ģ��
+        # 保存最佳模型
         if val_acc > best_acc:
             best_acc = val_acc
             save_path = f'best_{args.model_name}.pth'
             torch.save(model.state_dict(), save_path)
-            print(f"�������ģ�ͣ�׼ȷ�ʣ�{val_acc:.4f}")
+            print(f"保存最佳模型，准确率：{val_acc:.4f}")
         
-        # ��ӡ����
+        # 打印日志
         print(f"Epoch {epoch+1:02d} | "
               f"Train Loss: {train_loss_avg:.4f} | "
               f"Val Loss: {val_loss_avg:.4f} | "
               f"Acc: {val_acc:.4f} | "
               f"LR: {optimizer.param_groups[0]['lr']:.1e}")
 
-    print(f"\nѵ����ɣ������֤׼ȷ�ʣ�{best_acc:.4f}")
-
 if __name__ == '__main__':
-    multiprocessing.freeze_support()
     args = parse_args()
     main(args)
