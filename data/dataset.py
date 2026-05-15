@@ -1,50 +1,70 @@
-﻿import os
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets, transforms
+import os
+from PIL import Image
 
-def get_transform(model_name, input_size):
-    """获取模型通用预处理"""
-    return transforms.Compose([
-        transforms.Resize((input_size, input_size)),
+class CachedDataset(Dataset):
+    def __init__(self, subset, transform=None):
+        self.subset = subset
+        self.transform = transform
+        self.cache = [None] * len(subset)
+
+    def __getitem__(self, index):
+        if self.cache[index] is None:
+            image, label = self.subset[index]
+            self.cache[index] = (image, label)
+        else:
+            image, label = self.cache[index]
+        
+        # 应用实时数据增强（如随机翻转、归一化）
+        if self.transform:
+            image = self.transform(image)
+            
+        return image, label
+
+    def __len__(self):
+        return len(self.subset)
+
+def get_dataloader(data_dir, batch_size=32, image_size=224):
+    """
+    获取训练和验证数据的 DataLoader
+    启用了简单的内存缓存机制
+    """
+    
+    # 定义基础转换（仅缩放和转为 Tensor，用于缓存）
+    base_transform = transforms.Compose([
+        transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-def get_dataloaders(args):
-    """获取训练和验证数据加载器"""
-    transform = get_transform(args.model_name, args.input_size)
+    # 定义实时增强转换（针对 Tensor）
+    train_augment = transforms.Compose([
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
     
-    print(f"\n正在从以下路径加载数据集:")
-    print(f"  训练集: {args.train_dir}")
-    print(f"  验证集: {args.val_dir}")
-    
-    # 使用标准 ImageFolder，移除复杂的硬盘分块缓存以保持简单性
-    train_dataset = datasets.ImageFolder(args.train_dir, transform=transform)
-    val_dataset = datasets.ImageFolder(args.val_dir, transform=transform)
+    val_augment = transforms.Compose([
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
 
-    # 验证数据一致性
-    if train_dataset.classes != val_dataset.classes:
-        print(f"警告: 训练集类别 ({len(train_dataset.classes)}) 与验证集类别 ({len(val_dataset.classes)}) 不一致！")
+    # 加载原始数据集（不带复杂增强，先转为基本 Tensor）
+    raw_datasets = {
+        x: datasets.ImageFolder(os.path.join(data_dir, x), base_transform)
+        for x in ['train', 'val']
+    }
+
+    # 使用自定义 Dataset 包装，实现 Lazy Cache
+    # 注意：如果内存不足，请关闭此功能
+    image_datasets = {
+        'train': CachedDataset(raw_datasets['train'], transform=train_augment),
+        'val': CachedDataset(raw_datasets['val'], transform=val_augment)
+    }
     
-    # 自动计算合理的 num_workers
-    num_workers = min(os.cpu_count(), 8) if os.name == 'nt' else os.cpu_count()
+    dataloaders = {x: DataLoader(image_datasets[x], batch_size=batch_size,
+                                 shuffle=True, num_workers=1, pin_memory=True)
+                  for x in ['train', 'val']}
     
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-        prefetch_factor=2 if num_workers > 0 else None
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True,
-        prefetch_factor=2 if num_workers > 0 else None
-    )
-    
-    return train_loader, val_loader, len(train_dataset.classes)
+    dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
+    class_names = raw_datasets['train'].classes
+
+    return dataloaders, dataset_sizes, class_names
