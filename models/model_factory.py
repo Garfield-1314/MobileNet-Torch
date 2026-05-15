@@ -8,7 +8,7 @@ def get_model(model_name, num_classes, use_pretrained=False, width_mult=1.0, dev
         'mobilenet_v2': models.MobileNet_V2_Weights.IMAGENET1K_V1,
         'resnet50': models.ResNet50_Weights.IMAGENET1K_V2,
         'efficientnet_b0': models.EfficientNet_B0_Weights.IMAGENET1K_V1,
-        'vit_b_16': models.ViT_B_16_Weights.IMAGENET21K_PLUS_V1
+        'vit_b_16': models.ViT_B_16_Weights.IMAGENET1K_V1
     }
     
     if model_name not in weights_map:

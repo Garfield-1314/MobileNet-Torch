@@ -42,6 +42,11 @@ def validate(model, val_loader, criterion, device):
     return val_loss / len(val_loader.dataset), correct / len(val_loader.dataset)
 
 def main(args):
+    # 启用 cuDNN benchmark 以加速固定尺寸输入的训练
+    if args.device.type == 'cuda':
+        torch.backends.cudnn.benchmark = True
+        print("已开启 cuDNN benchmark 模式")
+
     # 数据和模型初始化
     train_loader, val_loader, num_classes = get_dataloaders(args)
 

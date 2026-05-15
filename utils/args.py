@@ -5,8 +5,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='多模型图像分类训练脚本')
     
     # 必需参数
-    parser.add_argument('--train_dir', type=str, default='./dataset/train', help='训练集目录路径')
-    parser.add_argument('--val_dir', type=str, default='./dataset/val', help='验证集目录路径')
+    parser.add_argument('--train_dir', type=str, default='D:\\github\\Datasets\\step3_6.分类-数据集划分\\train', help='训练集目录路径')
+    parser.add_argument('--val_dir', type=str, default='D:\\github\\Datasets\\step3_6.分类-数据集划分\\val', help='验证集目录路径')
     
     # 模型参数
     parser.add_argument('--model_name', type=str, default='mobilenet_v2', 

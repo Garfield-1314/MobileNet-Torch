@@ -35,14 +35,16 @@ def get_dataloaders(args):
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True
+        pin_memory=True,
+        prefetch_factor=2 if num_workers > 0 else None
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True
+        pin_memory=True,
+        prefetch_factor=2 if num_workers > 0 else None
     )
     
     return train_loader, val_loader, len(train_dataset.classes)
